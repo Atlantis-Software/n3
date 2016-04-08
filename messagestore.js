@@ -121,6 +121,10 @@ MessageStore.prototype.removeDeleted = function(){
  * Generates a MIME formatted e-mail message to be sent to the client
  **/
 MessageStore.prototype.buildMimeMail = function(options){
+    if (typeof options === 'string') {
+        // assume it is actually the entire email
+        return options;
+    }
     options = options || {};
 
     var from, to, subject, date, mime_boundary, attachments, header, body;
