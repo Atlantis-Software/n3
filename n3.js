@@ -277,13 +277,14 @@ N3.POP3Server.prototype.onCommand = function(request){
         return this.cmdAUTHNext(params);
     }
 
-    if(!cmd)
+    if(!cmd) {
         return this.response("-ERR");
+    }
     if(typeof this["cmd"+cmd[0].toUpperCase()]=="function"){
         return this["cmd"+cmd[0].toUpperCase()](params && params.trim());
     }
 
-    return this.response("-ERR");
+    this.response("-ERR");
 }
 
 // Universal commands
@@ -417,31 +418,37 @@ for(var i=0, len=sasl_methods.length; i < len; i++){
 // USAGE:
 //   CLIENT: APOP user MD5(salt+pass)
 //   SERVER: +OK You are now logged in
-
 N3.POP3Server.prototype.cmdAPOP = function(params){
-    if(this.state!=N3.States.AUTHENTICATION) return this.response("-ERR Only allowed in authentication mode");
-
     params = params.split(" ");
-    var user = params[0] && params[0].trim(),
-        hash = params[1] && params[1].trim().toLowerCase(),
-        salt = "<"+this.UID+"@"+this.server_name+">",
-        response;
-
-    if(typeof this.authCallback=="function"){
-        if(!this.authCallback(user, function(pass){
-            return md5(salt+pass)==hash;
-        })){
-            return this.response("-ERR [AUTH] Invalid login");
+    var self = this;
+    var user = params[0] && params[0].trim();
+    var hash = params[1] && params[1].trim().toLowerCase();
+    var salt = "<"+self.UID+"@"+self.server_name+">";
+    var response;
+    function handle() {
+        if ((response = self.afterLogin()) !== true) {
+            self.response(response || "-ERR [SYS] Error with initializing");
+            return;
         }
+        self.user = user;
+        self.state = N3.States.TRANSACTION;
+        self.response("+OK You are now logged in");
     }
 
-    this.user = user;
+    if (self.state != N3.States.AUTHENTICATION) {
+        self.response("-ERR Only allowed in authentication mode");
+        return;
+    }
 
-    if((response = this.afterLogin())===true){
-        this.state = N3.States.TRANSACTION;
-        return this.response("+OK You are now logged in");
-    }else
-        return this.response(response || "-ERR [SYS] Error with initializing");
+    if(typeof self.authCallback=="function"){
+        self.authCallback(user, function (foundPassword) {
+          if (md5(salt + foundPassword) != hash)
+          return self.response("-ERR [AUTH] Invalid login");
+        })
+        handle();
+        return;
+    }
+    handle();
 }
 
 // USER username - Performs basic authentication, PASS follows
@@ -456,24 +463,33 @@ N3.POP3Server.prototype.cmdUSER = function(username){
 
 // PASS - Performs basic authentication, runs after USER
 N3.POP3Server.prototype.cmdPASS = function(password){
-    if(this.state!=N3.States.AUTHENTICATION) return this.response("-ERR Only allowed in authentication mode");
-    if(!this.user) return this.response("-ERR USER not yet set");
+    var self = this;
 
-    if(typeof this.authCallback=="function"){
-        if(!this.authCallback(this.user, function(pass){
-            return pass==password;
-        })){
-            delete this.user;
-            return this.response("-ERR [AUTH] Invalid login");
-        }
+    function handle() {
+      if ((response = self.afterLogin()) === true) {
+          self.state = N3.States.TRANSACTION;
+          return self.response("+OK You are now logged in");
+      } else {
+          return self.response(response || "-ERR [SYS] Error with initializing");
+      }
     }
 
-    var response;
-    if((response = this.afterLogin())===true){
-        this.state = N3.States.TRANSACTION;
-        return this.response("+OK You are now logged in");
-    }else
-        return this.response(response || "-ERR [SYS] Error with initializing");
+    if(self.state!=N3.States.AUTHENTICATION) return self.response("-ERR Only allowed in authentication mode");
+    if(!self.user) return self.response("-ERR USER not yet set");
+
+    if(typeof self.authCallback=="function"){
+        self.authCallback(self.user, function (foundPassword) {
+            if (foundPassword !== password) {
+              this.response("-ERR [AUTH] Invalid login");
+              delete self.user;
+              return;
+            }
+            handle();
+        });
+        return;
+    }
+
+    handle();
 }
 
 // TRANSACTION commands
