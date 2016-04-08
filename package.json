@@ -8,14 +8,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/andris9/n3.git"
+    "url": "git://github.com/ruffrey/n3.git"
   },
   "author": "Andris Reinman",
   "license": "MIT",
   "readmeFilename": "README.md",
-  "gitHead": "af50865813bced47779ebce559d408cb4211c8c3",
-  "dependencies":{
-    "iconv": "*",
-    "node-markdown": "*"
+  "dependencies": {
+    "iconv-lite": "^0.4.13"
   }
 }
