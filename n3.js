@@ -3,32 +3,33 @@ var net = require('net'), // Enables to start the server
     fs = require("fs"), // Enables to load the certificate keys
     sasl_methods = require("./sasl").AUTHMethods; // Extensions to the SASL-AUTH
 
+var FIVE_MINUTES = 10 * 60 * 1000;
 /**
  * N3
- * 
+ *
  * POP3 Server for Node.JS
- * 
+ *
  * Usage:
  *     N3.startServer(port, server_name, AuthStore, MessageStore);
  *     - port (Number): Port nr to listen, 110 for unencrypted POP3
  *     - server_name (String): server domain name, ie. "node.ee"
  *     - AuthStore (Function): Function to authenticate users, see pop3_server.js for example
  *     - MessageStore (Constructor): See messagestore.js or pop3_server.js for example
- * 
+ *
  **/
 var N3 = {
-    
+
     /**
      * N3.server_name -> String
-     * 
+     *
      * Domain name of the server. Not really important, mainly used for generating
      * unique tokens (ie: <unique_str@server_name>) and for logging
      **/
     server_name: "localhost",
-    
+
     /**
      * N3.States -> Object
-     * 
+     *
      * Constants for different states of the current connection. Every state has
      * different possibilities, ie. APOP is allowed only in AUTHENTICATION state
      **/
@@ -40,23 +41,23 @@ var N3 = {
 
     /**
      * N3.COUNTER -> Number
-     * 
+     *
      * Connection counter, every time a new connection to the server is made, this
      * number is incremented by 1. Useful for generating connection based unique tokens
      **/
     COUNTER: 0,
-    
+
     /**
      * N3.authMethods -> Object
-     * 
+     *
      * Houses different authentication methods for SASL-AUTH as extensions. See
-     * N3.extendAuth for additional information 
+     * N3.extendAuth for additional information
      **/
     authMethods: {},
-    
+
     /**
      * N3.capabilities -> Object
-     * 
+     *
      * Prototype object for individual servers. Contains the items that will
      * be listed as an answer to the CAPA command. Individual server will add
      * specific commands to the list by itself.
@@ -72,10 +73,10 @@ var N3 = {
 
     /**
      * N3.connected_users -> Object
-     * 
+     *
      * Keeps a list of all users that currently have a connection. Users are added
      * as keys with a value of TRUE to the list and deleted when disconnecting
-     * 
+     *
      * Login:
      *     N3.connected_users[username] = true;
      * Logout:
@@ -84,18 +85,18 @@ var N3 = {
      *     if(N3.connected_users[username]);
      **/
     connected_users:{},
-    
+
     /**
      * N3.startServer(port, server_name, AuthStore, MessageStore) -> Boolean
      * - port (Number): Port nr to listen, 110 for unencrypted POP3
      * - server_name (String): server domain name, ie. "node.ee"
      * - AuthStore (Function): Function to authenticate users, see pop3_server.js for example
      * - MessageStore (Constructor): See messagestore.js or pop3_server.js for example
-     * 
+     *
      * Creates a N3 server running on specified port.
      **/
     startServer: function(port, server_name, auth, MsgStore, callback){
-        
+
         // try to start the server
         net.createServer(this.createInstance.bind(
                 this, server_name, auth, MsgStore)
@@ -110,26 +111,26 @@ var N3 = {
             });
 
     },
-    
+
     /**
      * N3.createInstance(server_name, auth, MsgStore, socket) -> Object
-     * 
+     *
      * Creates a dedicated server instance for every separate connection. Run by
      * net.createServer after a user tries to connect to the selected port.
      **/
     createInstance: function(server_name, auth, MsgStore, socket){
         new this.POP3Server(socket, server_name, auth, MsgStore);
     },
-    
+
     /**
      * N3.extendAUTH(name, action) -> undefined
      * - name (String): name for the authentication method, will be listed with SASL
      * - action (Function): Validates the authentication of an user
-     * 
+     *
      * Enables extending the SALS AUTH by adding new authentication method.
      * action gets a parameter authObject and is expected to return TRUE or FALSE
      * to show if the validation succeeded or not.
-     * 
+     *
      * authObject has the following structure:
      *   - wait (Boolean): initially false. If set to TRUE, then the next response from
      *                     the client will be forwarded directly back to the function
@@ -140,7 +141,7 @@ var N3 = {
      *   - check (Function): function to validate the user, has two params:
      *     - user (String): username of the logging user
      *     - pass (Function | String): password or function(pass){return pass==pass}
-     * 
+     *
      * See sasl.js for some examples
      **/
     extendAUTH: function(name, action){
@@ -151,7 +152,7 @@ var N3 = {
 
 /**
  * new n3.POP3Server(socket, server_name, auth, MsgStore)
- * 
+ *
  * Creates a dedicated server instance for every separate connection. Run by
  * N3.createInstance after a user tries to connect to the selected port.
  **/
@@ -171,17 +172,17 @@ N3.POP3Server = function(socket, server_name, auth, MsgStore){
         2: Object.create(N3.capabilities[2]),
         3: Object.create(N3.capabilities[3])
     }
-    
+
     //console.log("New connection from "+socket.remoteAddress);
     this.response("+OK POP3 Server ready <"+this.UID+"@"+this.server_name+">");
-    
+
     socket.on("data", this.onData.bind(this));
     socket.on("end", this.onEnd.bind(this));
 }
- 
+
 /**
  * N3.POP3Server#destroy() -> undefined
- * 
+ *
  * Clears the used variables just in case (garbage collector should
  * do this by itself)
  **/
@@ -196,9 +197,9 @@ N3.POP3Server.prototype.destroy = function(){
 }
 
 /**
- * 
+ *
  **/
-// kill client after 10 min on inactivity
+// kill client after inactivity
 N3.POP3Server.prototype.updateTimeout = function(){
     if(this.timer)clearTimeout(this.timer);
     this.timer = setTimeout((function(){
@@ -211,7 +212,7 @@ N3.POP3Server.prototype.updateTimeout = function(){
             delete N3.connected_users[this.user.trim().toLowerCase()];
         this.socket.end();
         this.destroy();
-    }).bind(this),10*60*1000); 
+    }).bind(this), FIVE_MINUTES);
 }
 
 N3.POP3Server.prototype.response = function(message){
@@ -221,7 +222,7 @@ N3.POP3Server.prototype.response = function(message){
     }else{
         response = Buffer.concat([message, new Buffer("\r\n", "utf-8")]);
     }
-    
+
     //console.log("SERVER: "+message);
     this.socket.write(response);
 }
@@ -236,7 +237,7 @@ N3.POP3Server.prototype.afterLogin = function(){
 
     if(typeof this.MsgStore!="function")
         return false;
-    
+
     if(this.user && (messages = new this.MsgStore(this.user))){
         this.messages = messages;
         N3.connected_users[this.user.trim().toLowerCase()] = true;
@@ -275,18 +276,18 @@ N3.POP3Server.prototype.onCommand = function(request){
         params = request.trim();
         return this.cmdAUTHNext(params);
     }
-    
+
     if(!cmd)
         return this.response("-ERR");
     if(typeof this["cmd"+cmd[0].toUpperCase()]=="function"){
         return this["cmd"+cmd[0].toUpperCase()](params && params.trim());
     }
-    
+
     return this.response("-ERR");
 }
 
 // Universal commands
-    
+
 // CAPA - Reveals server capabilities to the client
 N3.POP3Server.prototype.cmdCAPA = function(params){
 
@@ -326,17 +327,17 @@ N3.POP3Server.prototype.cmdQUIT = function(){
 // AUTH auth_engine - initiates an authentication request
 N3.POP3Server.prototype.cmdAUTH = function(auth){
     if(this.state!=N3.States.AUTHENTICATION) return this.response("-ERR Only allowed in authentication mode");
-    
+
     if(!auth)
         return this.response("-ERR Invalid authentication method");
-    
+
     var parts = auth.split(" "),
         method = parts.shift().toUpperCase().trim(),
         params = parts.join(" "),
         response;
-    
+
     this.authObj = {wait: false, params: params, history:[], check: this.cmdAUTHCheck.bind(this), n3: this};
-    
+
     // check if the asked auth methid exists and if so, then run it for the first time
     if(typeof N3.authMethods[method]=="function"){
         response = N3.authMethods[method](this.authObj);
@@ -419,7 +420,7 @@ for(var i=0, len=sasl_methods.length; i < len; i++){
 
 N3.POP3Server.prototype.cmdAPOP = function(params){
     if(this.state!=N3.States.AUTHENTICATION) return this.response("-ERR Only allowed in authentication mode");
-    
+
     params = params.split(" ");
     var user = params[0] && params[0].trim(),
         hash = params[1] && params[1].trim().toLowerCase(),
@@ -433,9 +434,9 @@ N3.POP3Server.prototype.cmdAPOP = function(params){
             return this.response("-ERR [AUTH] Invalid login");
         }
     }
-    
+
     this.user = user;
-    
+
     if((response = this.afterLogin())===true){
         this.state = N3.States.TRANSACTION;
         return this.response("+OK You are now logged in");
@@ -457,7 +458,7 @@ N3.POP3Server.prototype.cmdUSER = function(username){
 N3.POP3Server.prototype.cmdPASS = function(password){
     if(this.state!=N3.States.AUTHENTICATION) return this.response("-ERR Only allowed in authentication mode");
     if(!this.user) return this.response("-ERR USER not yet set");
-    
+
     if(typeof this.authCallback=="function"){
         if(!this.authCallback(this.user, function(pass){
             return pass==password;
@@ -466,7 +467,7 @@ N3.POP3Server.prototype.cmdPASS = function(password){
             return this.response("-ERR [AUTH] Invalid login");
         }
     }
-    
+
     var response;
     if((response = this.afterLogin())===true){
         this.state = N3.States.TRANSACTION;
@@ -482,7 +483,7 @@ N3.POP3Server.prototype.cmdNOOP = function(){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
     this.response("+OK");
 }
-    
+
 // STAT Lists the total count and bytesize of the messages
 N3.POP3Server.prototype.cmdSTAT = function(){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
@@ -494,20 +495,20 @@ N3.POP3Server.prototype.cmdSTAT = function(){
             this.response("+OK "+length+" "+size);
         }
     }).bind(this));
-    
+
 }
 
 // LIST [msg] lists all messages
 N3.POP3Server.prototype.cmdLIST = function(msg){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
-    
+
     this.messages.list(msg, (function(err, list){
         if(err){
             return this.response("-ERR LIST command failed")
         }
         if(!list)
             return this.response("-ERR Invalid message ID");
-        
+
         if(typeof list == "string"){
             this.response("+OK "+list);
         }else{
@@ -523,7 +524,7 @@ N3.POP3Server.prototype.cmdLIST = function(msg){
 // UIDL - lists unique identifiers for stored messages
 N3.POP3Server.prototype.cmdUIDL = function(msg){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
-    
+
     this.messages.uidl(msg, (function(err, list){
         if(err){
             return this.response("-ERR UIDL command failed")
@@ -531,7 +532,7 @@ N3.POP3Server.prototype.cmdUIDL = function(msg){
 
         if(!list)
             return this.response("-ERR Invalid message ID");
-        
+
         if(typeof list == "string"){
             this.response("+OK "+list);
         }else{
@@ -547,7 +548,7 @@ N3.POP3Server.prototype.cmdUIDL = function(msg){
 // RETR msg - outputs a selected message
 N3.POP3Server.prototype.cmdRETR = function(msg){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
-    
+
     this.messages.retr(msg, (function(err, message){
         if(err){
             return this.response("-ERR RETR command failed")
@@ -565,7 +566,7 @@ N3.POP3Server.prototype.cmdRETR = function(msg){
 // DELE msg - marks selected message for deletion
 N3.POP3Server.prototype.cmdDELE = function(msg){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
-    
+
     this.messages.dele(msg, (function(err, success){
         if(err){
             return this.response("-ERR RETR command failed")
@@ -598,4 +599,3 @@ function md5(str){
 
 // EXPORT
 this.N3 = N3;
-
