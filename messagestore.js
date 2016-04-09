@@ -6,15 +6,21 @@ this.MessageStore = MessageStore;
 
 function MessageStore(user){
     console.log("MessageStore created");
+    var self = this;
     this.user = user;
     var curtime = new Date().toLocaleString();
     this.messages = [];
-    if(typeof this.registerHook == "function")
-        this.registerHook();
+    if (typeof this.registerHook === "function") {
+        this.registerHook(function () {
+            self.didLoadHook = true;
+            self.onLoadHook();
+        });
+    }
 }
 
 MessageStore.prototype.registerHook = null;
-
+MessageStore.prototype.didLoadHook = false;
+MessageStore.prototype.onLoadHook = function noopOnLoadHook() {};
 MessageStore.prototype.length = 0;
 MessageStore.prototype.size = 0;
 MessageStore.prototype.messages = [];
@@ -22,13 +28,14 @@ MessageStore.prototype.counter = 0;
 
 MessageStore.prototype.addMessage = function(message){
     message = message || {};
-    if(!message.date)
-        message.date = +new Date();
+    if (typeof message !== 'string') {
+        if(!message.date)
+            message.date = +new Date();
 
-    if (!message.uid) {
-      message.uid = "uid" + (++this.counter) + (+new Date());
+        if (!message.uid) {
+          message.uid = "uid" + (++this.counter) + (+new Date());
+        }
     }
-
     message.size = this.buildMimeMail(message).length;
     this.messages.push(message);
     this.length++;

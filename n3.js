@@ -504,37 +504,57 @@ N3.POP3Server.prototype.cmdNOOP = function(){
 N3.POP3Server.prototype.cmdSTAT = function(){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
 
-    this.messages.stat((function(err, length, size){
-        if(err){
-            this.response("-ERR STAT failed")
-        }else{
-            this.response("+OK "+length+" "+size);
-        }
-    }).bind(this));
+    var self = this;
 
+    function stat() {
+        self.messages.stat((function (err, length, size) {
+            if (err){
+                self.response("-ERR STAT failed")
+            } else{
+                self.response("+OK " + length + " " + size);
+            }
+        }).bind(self));
+    }
+
+    if (!self.messages.didLoadHook) {
+        self.messages.onLoadHook = stat;
+    } else {
+        stat();
+    }
 }
 
 // LIST [msg] lists all messages
 N3.POP3Server.prototype.cmdLIST = function(msg){
     if(this.state!=N3.States.TRANSACTION) return this.response("-ERR Only allowed in transaction mode");
 
-    this.messages.list(msg, (function(err, list){
-        if(err){
-            return this.response("-ERR LIST command failed")
-        }
-        if(!list)
-            return this.response("-ERR Invalid message ID");
+    var self = this;
 
-        if(typeof list == "string"){
-            this.response("+OK "+list);
-        }else{
-            this.response("+OK");
-            for(var i=0;i<list.length;i++){
-                this.response(list[i]);
+    function list() {
+        self.messages.list(msg, (function(err, list){
+            if (err) {
+                return self.response("-ERR LIST command failed")
             }
-            this.response(".");
-        }
-    }).bind(this));
+            if (!list) {
+                return self.response("-ERR Invalid message ID");
+            }
+
+            if (typeof list == "string") {
+                self.response("+OK "+list);
+            } else {
+                self.response("+OK");
+                for (var i=0; i < list.length; i++) {
+                    self.response(list[i]);
+                }
+                self.response(".");
+            }
+        }).bind(self));
+    }
+
+    if (!self.messages.didLoadHook) {
+        self.messages.onLoadHook = list;
+    } else {
+        list();
+    }
 }
 
 // UIDL - lists unique identifiers for stored messages
