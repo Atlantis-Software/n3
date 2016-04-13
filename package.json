@@ -10,10 +10,13 @@
     "type": "git",
     "url": "git://github.com/ruffrey/n3.git"
   },
-  "author": "Andris Reinman",
+  "originalAuthor": "Andris Reinman",
   "license": "MIT",
-  "readmeFilename": "README.md",
+  "engines": {
+    "node": ">=4.0.0"
+  },
   "dependencies": {
+    "debug": "^2.2.0",
     "iconv-lite": "^0.4.13"
   }
 }
