@@ -4,7 +4,6 @@ const fs = require('fs'); // Enables to load the certificate keys
 const sasl_methods = require('./sasl').AUTHMethods; // Extensions to the SASL-AUTH
 const debug = require('debug')('n3-server');
 const POP3Server = require('./pop3server');
-const TEN_MINUTES = 10 * 60 * 1000;
 
 /**
  * N3

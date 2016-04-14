@@ -16,7 +16,6 @@ function MessageStore(user) {
     this.user = user;
     this.messages = [];
     this.deletedMessages = [];
-    this.registerHook = null;
     this.didLoadHook = false;
 
     if (typeof this.registerHook === "function") {
@@ -26,6 +25,8 @@ function MessageStore(user) {
         });
     }
 }
+
+MessageStore.prototype.registerHook = null;
 
 MessageStore.prototype.onLoadHook = function noopOnLoadHook() {
     debug('onLoadHook has not been overriden by your implementation of MessageStore')

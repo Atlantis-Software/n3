@@ -1,6 +1,8 @@
 'use strict';
 const States = require('./states');
 const crypto = require('crypto');
+const debug = require('debug')('n3-pop3');
+const TEN_MINUTES = 10 * 60 * 1000;
 
 function md5(str) {
     const hash = crypto.createHash('md5');
@@ -58,7 +60,7 @@ POP3Server.prototype.destroy = function destroy() {
         this.socket.end();
     }
 
-    if (connected_users[this.user]) {
+    if (this.N3.connected_users[this.user]) {
         delete this.N3.connected_users[this.user];
     }
 }
@@ -83,6 +85,7 @@ POP3Server.prototype.response = function response(message) {
         message = message.toString();
     }
     if (typeof message == "string") {
+        debug('responding', message.substring(0, 40));
         resBuffer = new Buffer(message + "\r\n", "utf-8");
     } else {
         resBuffer = Buffer.concat([message, new Buffer("\r\n", "utf-8")]);
@@ -126,7 +129,7 @@ POP3Server.prototype.onCommand = function (request) {
     const cmd = request.match(/^[A-Za-z]+/);
     let params = cmd && request.substr(cmd[0].length + 1);
 
-    debug('onCommand', cmd);
+    debug('onCommand', cmd, 'authState=', this.authState);
 
     this.updateTimeout();
 
@@ -191,10 +194,10 @@ POP3Server.prototype.cmdAUTH = function (auth) {
     if (!auth)
         return this.response("-ERR Invalid authentication method");
 
-    var parts = auth.split(" "),
-        method = parts.shift().toUpperCase().trim(),
-        params = parts.join(" "),
-        response;
+    var parts = auth.split(" ");
+    var method = parts.shift().toUpperCase().trim();
+    var params = parts.join(" ");
+    var response;
 
     this.authObj = {
         wait: false,
@@ -249,6 +252,7 @@ POP3Server.prototype.cmdAUTHNext = function (params) {
     this.authObj.wait = false;
     this.authObj.params = params;
     this.authObj.n3 = this;
+    debug('cmdAUTHNext', this.authState, this.authObj);
     var response = this.N3.authMethods[this.authState](this.authObj);
     if (!response) {
         this.authState = false;
@@ -336,6 +340,7 @@ POP3Server.prototype.cmdPASS = function (password) {
     var self = this;
 
     function handle() {
+        let response;
         if ((response = self.afterLogin()) === true) {
             self.state = States.TRANSACTION;
             return self.response("+OK You are now logged in");
@@ -402,9 +407,11 @@ POP3Server.prototype.cmdLIST = function (msg) {
     function list() {
         self.store.list(msg, (function (err, list) {
             if (err) {
+                debug('LIST failed internally', err);
                 return self.response("-ERR LIST command failed")
             }
             if (!list) {
+                debug('LIST failed internally', err);
                 return self.response("-ERR Invalid message ID");
             }
 
@@ -492,3 +499,5 @@ POP3Server.prototype.cmdRSET = function () {
     this.store.rset();
     this.response("+OK");
 }
+
+module.exports = POP3Server;

@@ -1,4 +1,4 @@
-var N3 = require("./n3").N3,
+var N3 = require("./n3"),
     MessageStore = require("./messagestore").MessageStore,
     server_name = "fw.node.ee";
 
