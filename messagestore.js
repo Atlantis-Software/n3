@@ -28,9 +28,7 @@ function MessageStore(user) {
 
 MessageStore.prototype.registerHook = null;
 
-MessageStore.prototype.onLoadHook = function noopOnLoadHook() {
-    debug('onLoadHook has not been overriden by your implementation of MessageStore')
-};
+MessageStore.prototype.onLoadHook = function noopOnLoadHook() {};
 
 MessageStore.prototype.removeDeleted = function noopRemoveDeleted() {
     debug('removeDeleted has not been overridden by your implementation of MessageStore');
@@ -100,8 +98,9 @@ MessageStore.prototype.dele = function dele(_msg, callback) {
     if (invalidIndex) {
         return callback(null, false);
     }
-    var deletedMsg = this.messages.splice(msg, 1);
-    if (deletedMsg) {
+    // not actually removed at this time - will be removed when connection closes
+    var deletedMsg = this.messages.slice(msg, 1);
+    if (deletedMsg.length) {
         this.deletedMessages.push(deletedMsg);
     }
     return callback(null, true);

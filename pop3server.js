@@ -85,7 +85,7 @@ POP3Server.prototype.response = function response(message) {
         message = message.toString();
     }
     if (typeof message == "string") {
-        debug('responding', message.substring(0, 40));
+        debug('responding', this.user, message.substring(0, 40));
         resBuffer = new Buffer(message + "\r\n", "utf-8");
     } else {
         resBuffer = Buffer.concat([message, new Buffer("\r\n", "utf-8")]);
@@ -411,7 +411,7 @@ POP3Server.prototype.cmdLIST = function (msg) {
                 return self.response("-ERR LIST command failed")
             }
             if (!list) {
-                debug('LIST failed internally', err);
+                debug('LIST failed no message', msg);
                 return self.response("-ERR Invalid message ID");
             }
 
@@ -444,7 +444,7 @@ POP3Server.prototype.cmdUIDL = function (msg) {
         }
 
         if (!list)
-            return this.response("-ERR Invalid message ID");
+            return this.response("-ERR Invalid message ID", msg);
 
         if (typeof list == "string") {
             this.response("+OK " + list);
@@ -467,7 +467,7 @@ POP3Server.prototype.cmdRETR = function (msg) {
             return this.response("-ERR RETR command failed")
         }
         if (!message) {
-            return this.response("-ERR Invalid message ID");
+            return this.response("-ERR Invalid message ID " + msg);
         }
         this.response("+OK " + message.length + " octets");
         this.response(message);
@@ -485,7 +485,7 @@ POP3Server.prototype.cmdDELE = function (msg) {
             return this.response("-ERR RETR command failed")
         }
         if (!success) {
-            return this.response("-ERR Invalid message ID");
+            return this.response("-ERR Invalid message ID " + msg);
         } else {
             this.response("+OK msg deleted");
         }
