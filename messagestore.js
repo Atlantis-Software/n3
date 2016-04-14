@@ -1,27 +1,39 @@
 var debug = require('debug')('n3-messagestore');
 var Message = require('./message');
 
-// Message handling per session
+var sum = (a, b) => (a + b.length);
 
+/**
+ * One MessageStore is created per socket / user connection and is used to handle
+ * the intermediate steps between the N3 pop3 server and the database.
+ * In particular, onLoadHook can be overriden on the prototype of MessageStore,
+ * to preload messages.
+ * @constructor
+ * @param {string} user - email address
+ */
 function MessageStore(user) {
     debug('MessageStore created', user);
-    var self = this;
     this.user = user;
-    var curtime = new Date().toLocaleString();
     this.messages = [];
+    this.deletedMessages = [];
+    this.registerHook = null;
+    this.didLoadHook = false;
+
     if (typeof this.registerHook === "function") {
-        this.registerHook(function () {
-            self.didLoadHook = true;
-            self.onLoadHook();
+        this.registerHook(() => {
+            this.didLoadHook = true;
+            this.onLoadHook();
         });
     }
 }
 
-MessageStore.prototype.registerHook = null;
-MessageStore.prototype.didLoadHook = false;
-MessageStore.prototype.onLoadHook = function noopOnLoadHook() {};
-MessageStore.prototype.messages = [];
-MessageStore.prototype.deletedMessages = [];
+MessageStore.prototype.onLoadHook = function noopOnLoadHook() {
+    debug('onLoadHook has not been overriden by your implementation of MessageStore')
+};
+
+MessageStore.prototype.removeDeleted = function noopRemoveDeleted() {
+    debug('removeDeleted has not been overridden by your implementation of MessageStore');
+};
 
 MessageStore.prototype.addMessage = function (message, uid) {
     this.messages.push(
@@ -31,9 +43,7 @@ MessageStore.prototype.addMessage = function (message, uid) {
 };
 
 MessageStore.prototype.stat = function (callback) {
-    const size = this.messages.reduce((a, b) => {
-        return a + b.length;
-    }, 0);
+    const size = this.messages.reduce(sum, 0);
     debug('stat', this.user, size);
     callback(null, this.messages.length, size);
 };
@@ -52,7 +62,12 @@ MessageStore.prototype.list = function (_msg, callback) {
     );
     callback(null, result);
 };
-
+/**
+ * Unique ID List
+ * @param  {int} _msg - index +1, optional to only respond with one
+ * @param  {Function} callback [description]
+ * @return {[type]}            [description]
+ */
 MessageStore.prototype.uidl = function (_msg, callback) {
     debug('uidl', this.user, _msg);
     var msg = _msg - 1;
@@ -67,22 +82,26 @@ MessageStore.prototype.uidl = function (_msg, callback) {
     );
     callback(null, result);
 };
-
-MessageStore.prototype.retr = function (_msg, callback) {
+/**
+ * Retrieve the message
+ * @param  {int} _msg - index +1 of the message (0 is not allowed in pop3 protocol)
+ * @param  {Function} callback (err, Message)
+ */
+MessageStore.prototype.retr = function retr(_msg, callback) {
     debug('retr', this.user, _msg);
     var msg = _msg - 1;
     callback(null, this.messages[msg]);
 };
-MessageStore.prototype.dele = function (_msg, callback) {
+MessageStore.prototype.dele = function dele(_msg, callback) {
     var msg = _msg - 1;
     debug('dele', this.user, msg);
     var invalidIndex = isNaN(msg) || !this.messages[msg];
     if (invalidIndex) {
         return callback(null, false);
     }
-    var deleted = this.messages.splice(msg, 1);
-    if (deleted) {
-        this.deletedMessages.push(deleted);
+    var deletedMsg = this.messages.splice(msg, 1);
+    if (deletedMsg) {
+        this.deletedMessages.push(deletedMsg);
     }
     return callback(null, true);
 };
@@ -90,10 +109,6 @@ MessageStore.prototype.dele = function (_msg, callback) {
 MessageStore.prototype.rset = function () {
     debug('rset', this.user);
     this.messages = this.messages.concat(this.deletedMessages);
-};
-
-MessageStore.prototype.removeDeleted = function () {
-    debug('removeDeleted has not been overridden by your implementation', this.user);
 };
 
 exports.MessageStore = MessageStore;
