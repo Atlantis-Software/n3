@@ -101,7 +101,7 @@ MessageStore.prototype.dele = function dele(_msg, callback) {
     // not actually removed at this time - will be removed when connection closes
     var deletedMsg = this.messages.slice(msg, 1);
     if (deletedMsg.length) {
-        this.deletedMessages.push(deletedMsg);
+        this.deletedMessages.push(deletedMsg[0]);
     }
     return callback(null, true);
 };
