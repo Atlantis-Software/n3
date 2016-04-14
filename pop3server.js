@@ -39,8 +39,9 @@ function POP3Server(socket, server_name, auth, MsgStore, N3) {
     debug('connection ' + this.connection_id, socket.remoteAddress);
     this.response("+OK POP3 Server ready <" + this.UID + "@" + this.server_name + ">");
 
-    socket.on("data", this.onData.bind(this));
-    socket.on("end", this.onEnd.bind(this));
+    socket.on('data', this.onData.bind(this));
+    socket.on('end', this.onEnd.bind(this));
+    socket.on('error', this.onError.bind(this));
 }
 
 /**
@@ -50,18 +51,20 @@ function POP3Server(socket, server_name, auth, MsgStore, N3) {
  * do this by itself)
  **/
 POP3Server.prototype.destroy = function destroy() {
-    debug('destroying connection', this.user);
+    const remoteAddress = this.socket ? this.socket.remoteAddress : null;
+    debug('destroying connection', this.user, this.connection_id, remoteAddress);
+
     if (this.timer) {
         clearTimeout(this.timer);
     }
     this.timer = null;
 
-    if (this.socket && this.socket.end) {
-        this.socket.end();
-    }
-
     if (this.N3.connected_users[this.user]) {
         delete this.N3.connected_users[this.user];
+    }
+
+    if (this.socket && this.socket.end) {
+        this.socket.end();
     }
 }
 
@@ -105,25 +108,24 @@ POP3Server.prototype.afterLogin = function () {
         return true;
     }
     return false;
-}
+};
 
 POP3Server.prototype.onData = function (data) {
     const request = data.toString("ascii", 0, data.length);
     this.onCommand(request);
-}
+};
 
 POP3Server.prototype.onEnd = function (data) {
     if (this.state === null)
         return;
     this.state = States.UPDATE;
-    if (this.user) {
-        debug('closing connection', this.user);
-    }
-    if (this.user && this.N3.connected_users[this.user]) {
-        delete this.N3.connected_users[this.user];
-    }
     this.destroy();
-}
+};
+
+POP3Server.prototype.onError = function (err) {
+    debug('socket error', this.user, err.message);
+    this.destroy();
+};
 
 POP3Server.prototype.onCommand = function (request) {
     const cmd = request.match(/^[A-Za-z]+/);
