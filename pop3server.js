@@ -85,7 +85,7 @@ POP3Server.prototype.response = function response(message) {
         message = message.toString();
     }
     if (typeof message == "string") {
-        debug('responding', this.user, message.substring(0, 40));
+        debug('responding', this.user, message.substring(0, 60));
         resBuffer = new Buffer(message + "\r\n", "utf-8");
     } else {
         resBuffer = Buffer.concat([message, new Buffer("\r\n", "utf-8")]);
