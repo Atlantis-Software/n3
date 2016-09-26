@@ -1,185 +1,114 @@
-var mime = require("./mime");
+var debug = require('debug')('n3-messagestore');
+var Message = require('./message');
 
-// Message handling per session
+var sum = (a, b) => (a + b.length);
 
-this.MessageStore = MessageStore;
-
-function MessageStore(user){
-    console.log("MessageStore created");
+/**
+ * One MessageStore is created per socket / user connection and is used to handle
+ * the intermediate steps between the N3 pop3 server and the database.
+ * In particular, onLoadHook can be overriden on the prototype of MessageStore,
+ * to preload messages.
+ * @constructor
+ * @param {string} user - email address
+ */
+function MessageStore(user) {
+    debug('MessageStore created', user);
     this.user = user;
-    var curtime = new Date().toLocaleString();
     this.messages = [];
-    if(typeof this.registerHook == "function")
-        this.registerHook();
+    this.deletedMessages = [];
+    this.didLoadHook = false;
+
+    if (typeof this.registerHook === "function") {
+        this.registerHook(() => {
+            this.didLoadHook = true;
+            this.onLoadHook();
+        });
+    }
 }
 
 MessageStore.prototype.registerHook = null;
 
-MessageStore.prototype.length = 0;
-MessageStore.prototype.size = 0;
-MessageStore.prototype.messages = [];
-MessageStore.prototype.counter = 0;
+MessageStore.prototype.onLoadHook = function noopOnLoadHook() {};
 
-MessageStore.prototype.addMessage = function(message){
-    message = message || {};
-    if(!message.date)
-        message.date = +new Date();
-    message.uid = "uid"+(++this.counter)+(+new Date());
-    
-    message.size = this.buildMimeMail(message).length;
-    this.messages.push(message);
-    this.length++;
-    this.size += message.size;
+MessageStore.prototype.removeDeleted = function noopRemoveDeleted() {
+    debug('removeDeleted has not been overridden by your implementation of MessageStore');
 };
 
-MessageStore.prototype.stat = function(callback){
-    callback(null, this.length, this.size);
-}
+MessageStore.prototype.addMessage = function (message, uid) {
+    this.messages.push(
+        new Message(message, uid)
+    );
+    debug('addMessage', message.length, uid, this.user);
+};
 
-MessageStore.prototype.list = function(msg, callback){
-    var result = [];
-    if(msg){
-        if(isNaN(msg) || msg<1 || msg>this.messages.length || 
-                                this.messages[msg-1].deleteFlag)
-            callback(null, false);
-        return msg+" "+this.messages[msg-1].size;
-    }
-    for(var i=0, len = this.messages.length;i<len;i++){
-        if(!this.messages[i].deleteFlag)
-            result.push((i+1)+" "+this.messages[i].size)
-    }
-    callback(null, result);
-}
+MessageStore.prototype.stat = function (callback) {
+    const size = this.messages.reduce(sum, 0);
+    debug('stat', this.user, size);
+    callback(null, this.messages.length, size);
+};
 
-MessageStore.prototype.uidl = function(msg, callback){
-    var result = [];
-    if(msg){
-        if(isNaN(msg) || msg<1 || msg>this.messages.length || 
-                                this.messages[msg-1].deleteFlag)
-            callback(null, false);
-        callback(null, msg+" "+this.messages[msg-1].uid);
-    }
-    for(var i=0, len = this.messages.length;i<len;i++){
-        if(!this.messages[i].deleteFlag)
-            result.push((i+1)+" "+this.messages[i].uid)
-    }
-    callback(null, result);
-}
-
-MessageStore.prototype.retr = function(msg, callback){
-    if(!msg || isNaN(msg) || msg<1 || msg>this.messages.length || 
-                                this.messages[msg-1].deleteFlag)
-        return callback(null, false);
-    return callback(null, this.buildMimeMail(this.messages[msg-1]));
-}
-
-MessageStore.prototype.dele = function(msg, callback){
-    if(!msg || isNaN(msg) || msg<1 || msg>this.messages.length || 
-                                this.messages[msg-1].deleteFlag)
-        return callback(null, false);
-    this.messages[msg-1].deleteFlag = true;
-    this.length--;
-    this.size -= this.messages[msg-1].size;
-    return callback(null, true);
-}
-
-MessageStore.prototype.rset = function(){
-    for(var i=0, len = this.messages.length; i<len;i++){
-        if(this.messages[i].deleteFlag){
-            this.messages[i].deleteFlag = false;
-            this.length++;
-            this.size += this.messages[i].size;
+MessageStore.prototype.list = function (_msg, callback) {
+    debug('list', this.user, _msg);
+    var msg = _msg - 1;
+    if (msg >= 0 && typeof msg === 'number') {
+        if (!this.messages[msg]) {
+            return callback(null, null);
         }
+        return callback(_msg + ' ' + this.messages[msg].length);
     }
-}
-
-MessageStore.prototype.removeDeleted = function(){
-    for(var i=this.messages.length-1; i>=0;i--){
-        if(this.messages[i].deleteFlag){
-            this.messages.splice(i,1);
-            console.log("Deleted MSG #"+(i+1));
-        }
-    }
-}
-
-
+    var result = this.messages.map(
+        (m, index) => (index + 1) + ' ' + m.length
+    );
+    callback(null, result);
+};
 /**
- * MessageStore#buildMimeMail(options) -> String
- * - options (Object): e-mail options
- *   - fromName (String): the name of the sender
- *   - fromAddress (String): the e-mail address of the sender
- *   - toName (String): the name of the recepient
- *   - toAddress (String): the e-mail address of the recepient
- *   - date (Number): JS timestamp
- *   - subject (String): title of the message
- *   - text (String): plain text version of the message
- *   - html (String): html version of the message
- * 
- * Generates a MIME formatted e-mail message to be sent to the client
- **/
-MessageStore.prototype.buildMimeMail = function(options){
-    options = options || {};
-    
-    var from, to, subject, date, mime_boundary, attachments, header, body;
-    
-    from = [];
-    if(options.fromName)
-        from.push(mime.encodeMimeWord(options.fromName, "Q"));
-    if(options.fromAddress)
-        from.push('<'+options.fromAddress+'>');
-    from = from.length?from.join(" "):"unknown@localhost";
-    
-    to = [];
-    if(options.toName)
-        to.push(mime.encodeMimeWord(options.toName, "Q"));
-    if(options.toAddress)
-        to.push('<'+options.toAddress+'>');
-    to = to.length?to.join(" "):"unknown@localhost";
-    
-    subject = mime.encodeMimeWord(options.subject || 'untitled message', "Q");
-    
-    date = (options.date?new Date(options.date):new Date()).toGMTString();
-    
-    mime_boundary = '----bd_n3-lunchhour'+(+new Date())+'----';
-    
-    // header
-    header = mime.foldLine('From: '+from)+"\r\n"+
-        mime.foldLine('To: '+to)+"\r\n"+
-        mime.foldLine('Date: '+date)+"\r\n"+
-        mime.foldLine('Subject: '+subject)+"\r\n"+
-        mime.foldLine('MIME-Version: 1.0')+"\r\n"+
-        mime.foldLine('Content-Type: multipart/alternative; boundary="'+mime_boundary+'"')+"\r\n"+
-        "\r\n";
-
-    attachments = [];
-    if(options.text){
-        attachments.push(
-                'Content-Type: text/plain; charset="utf-8"'+"\r\n"+
-                'Content-Transfer-Encoding: quoted-printable'+"\r\n"+
-                "\r\n"+
-                mime.encodeQuotedPrintable(options.text)
-        );
+ * Unique ID List
+ * @param  {int} _msg - index +1, optional to only respond with one
+ * @param  {Function} callback [description]
+ * @return {[type]}            [description]
+ */
+MessageStore.prototype.uidl = function (_msg, callback) {
+    debug('uidl', this.user, _msg);
+    var msg = _msg - 1;
+    if (msg >= 0 && typeof msg === 'number') {
+        if (!this.messages[msg]) {
+            return callback(null, null);
+        }
+        return callback(null, _msg + ' ' + this.messages[msg].uid);
     }
-
-    if(options.html){
-        attachments.push(
-                'Content-Type: text/html; charset="utf-8"'+"\r\n"+
-                'Content-Transfer-Encoding: quoted-printable'+"\r\n"+
-                "\r\n"+
-                mime.encodeQuotedPrintable(options.html)
-        );
+    var result = this.messages.map(
+        (m, index) => (index + 1) + ' ' + m.uid
+    );
+    callback(null, result);
+};
+/**
+ * Retrieve the message
+ * @param  {int} _msg - index +1 of the message (0 is not allowed in pop3 protocol)
+ * @param  {Function} callback (err, Message)
+ */
+MessageStore.prototype.retr = function retr(_msg, callback) {
+    debug('retr', this.user, _msg);
+    var msg = _msg - 1;
+    callback(null, this.messages[msg]);
+};
+MessageStore.prototype.dele = function dele(_msg, callback) {
+    var msg = _msg - 1;
+    debug('dele', this.user, msg);
+    var invalidIndex = isNaN(msg) || !this.messages[msg];
+    if (invalidIndex) {
+        return callback(null, false);
     }
-    
-    if(!attachments.length){
-        attachments.push(
-                'Content-Type: text/plain; charset="utf-8"'+"\r\n"+
-                'Content-Transfer-Encoding: base64'+"\r\n"+
-                "\r\n"+
-                mime.encodeBase64("(empty message)")
-        );
+    // not actually removed at this time - will be removed when connection closes
+    var deletedMsg = this.messages.slice(msg, msg + 1);
+    if (deletedMsg.length) {
+        this.deletedMessages.push(deletedMsg[0]);
     }
+    return callback(null, true);
+};
 
-    body = '--'+mime_boundary+"\r\n"+ attachments.join("\r\n"+'--'+mime_boundary+"\r\n")+"\r\n"+'--'+mime_boundary+"--\r\n\r\n";
-    
-    return header + body;
-}
+MessageStore.prototype.rset = function () {
+    debug('rset', this.user);
+    this.messages = this.messages.concat(this.deletedMessages);
+};
+
+exports.MessageStore = MessageStore;

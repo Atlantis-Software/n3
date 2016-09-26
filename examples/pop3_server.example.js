@@ -1,9 +1,6 @@
-var N3 = require("./n3").N3,
+var N3 = require("./n3"),
     MessageStore = require("./messagestore").MessageStore,
-
     server_name = "fw.node.ee";
-
-var markdown = require("node-markdown").Markdown;
 
 // runs after the user is successfully authenticated
 MessageStore.prototype.registerHook = function(){
@@ -27,7 +24,7 @@ MessageStore.prototype.registerHook = function(){
                   "    }\n"+
                   "\n\n"+
                   "Parimat,  \nKellamees";
-    
+
     this.addMessage({
         toName:         "Andris Reinman",
         toAddress:      "andris.reinman@gmail.com",
@@ -35,7 +32,7 @@ MessageStore.prototype.registerHook = function(){
         fromAddress:    "amblik.kambu@node.ee",
         subject:        "Muti metroo on nüüd avatud!",
         text:           message,
-        html:           markdown(message)
+        html:           message.replace(/\\n/g, '<br />')
     });
 }
 
