@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const debug = require('debug')('pop3-server');
 const os = require('os')
 const net = require('net');
+const tls = require('tls');
 var MessageStore = require("./messagestore");
 var POP3Connnection = require("./connection");
 var SASL = require("./sasl");
@@ -45,7 +46,7 @@ var POP3Server = module.exports = function(options) {
     }
 
     this.connection_secured = false;
-
+    this.tlsOptions = 
     this.capabilities = {
         // AUTHENTICATION
         1: ["UIDL", "USER", "RESP-CODES", "AUTH-RESP-CODE"],
@@ -182,11 +183,43 @@ POP3Server.prototype.cmdQUIT = function (connection) {
     }
 }
 
+POP3Server.prototype.cmdSTLS = function (connection) {
+    var self = this;
+
+    if (connection.state != States.AUTHENTICATION) {
+      return connection.response("-ERR Only allowed in authentication mode");
+    }
+    if (!this.options.tls) {
+      return connection.response("-ERR invalid command");
+    }
+    connection.response("+OK begin TLS negotiation");
+    connection.socket.removeAllListeners();
+    var socketOptions = {
+      secureContext: tls.createSecureContext(self.options.tls),
+      isServer: true
+    };
+    connection.socket = new tls.TLSSocket(connection.socket, socketOptions);
+
+    connection.socket.on('secure', function () {
+      connection.socket.on('data', function (data) {
+          self.onData(connection, data);
+      });
+      connection.socket.on('end', function (data) {
+          self.onEnd(connection, data);
+      });
+      connection.socket.on('error', function (err) {
+          self.onError(connection, err);
+      });
+    });
+}
+
 // AUTHENTICATION commands
 
 // AUTH auth_engine - initiates an authentication request
 POP3Server.prototype.cmdAUTH = function (connection, auth) {
-    if (connection.state != States.AUTHENTICATION) return connection.response("-ERR Only allowed in authentication mode");
+    if (connection.state != States.AUTHENTICATION) {
+        return connection.response("-ERR Only allowed in authentication mode");
+    }
 
     if (!auth) {
         return connection.response("-ERR Invalid authentication method");
