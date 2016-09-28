@@ -1,16 +1,15 @@
 {
-  "name": "pop3-n3",
-  "version": "3.1.4",
+  "name": "pop-server",
+  "version": "0.0.1",
   "description": "POP3 server for node.js",
-  "main": "n3.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha -R spec tests/"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/ruffrey/n3.git"
+    "url": "git://github.com/Atlantis-Software/pop-server.git"
   },
-  "originalAuthor": "Andris Reinman",
   "license": "MIT",
   "engines": {
     "node": ">=4.0.0"
@@ -18,5 +17,11 @@
   "dependencies": {
     "debug": "^2.2.0",
     "iconv-lite": "^0.4.13"
+  },
+  "devDependencies": {
+    "chai": "~3.5.0",
+    "mailx": "~0.0.11",
+    "mocha": "~3.0.2",
+    "mailcomposer": "~0.1.29"
   }
 }

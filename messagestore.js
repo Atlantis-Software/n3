@@ -1,50 +1,50 @@
-var debug = require('debug')('n3-messagestore');
-var Message = require('./message');
-
-var sum = (a, b) => (a + b.length);
+var debug = require('debug')('messagestore');
 
 /**
  * One MessageStore is created per socket / user connection and is used to handle
- * the intermediate steps between the N3 pop3 server and the database.
- * In particular, onLoadHook can be overriden on the prototype of MessageStore,
- * to preload messages.
- * @constructor
- * @param {string} user - email address
+ * the intermediate steps between the pop3 server and the database.
+ * register, read and removeDeleted should be overriden on pop3server store option.
  */
-function MessageStore(user) {
-    debug('MessageStore created', user);
-    this.user = user;
+var MessageStore = module.exports = function(connection) {
+    debug('MessageStore created', connection.user);
+    this.user = connection.user;
     this.messages = [];
     this.deletedMessages = [];
-    this.didLoadHook = false;
-
-    if (typeof this.registerHook === "function") {
-        this.registerHook(() => {
-            this.didLoadHook = true;
-            this.onLoadHook();
-        });
-    }
-}
-
-MessageStore.prototype.registerHook = null;
-
-MessageStore.prototype.onLoadHook = function noopOnLoadHook() {};
-
-MessageStore.prototype.removeDeleted = function noopRemoveDeleted() {
-    debug('removeDeleted has not been overridden by your implementation of MessageStore');
+    this.connection = connection;
 };
 
-MessageStore.prototype.addMessage = function (message, uid) {
-    this.messages.push(
-        new Message(message, uid)
-    );
-    debug('addMessage', message.length, uid, this.user);
+MessageStore.prototype.register = function noopRegister(cb) {
+    debug('register has not been overridden by your implementation of MessageStore');
+    cb();
+};
+
+MessageStore.prototype.read = function noopRead(uid, cb) {
+    debug('read has not been overridden by your implementation of MessageStore');
+    cb(null, '');
+};
+
+MessageStore.prototype.removeDeleted = function noopRemoveDeleted(deleted, cb) {
+    debug('removeDeleted has not been overridden by your implementation of MessageStore');
+    cb();
+};
+
+MessageStore.prototype.addMessage = function (uid, length) {
+    this.messages.push({uid: uid, length: length});
+    debug('addMessage', length, uid, this.user);
 };
 
 MessageStore.prototype.stat = function (callback) {
-    const size = this.messages.reduce(sum, 0);
+    var count = 0;
+    var size = 0;
+    this.messages.forEach(function(msg){
+        if (!msg.deleted) {
+            count++;
+            size += msg.length;
+        }
+        
+    });
     debug('stat', this.user, size);
-    callback(null, this.messages.length, size);
+    callback(null, count, size);
 };
 
 MessageStore.prototype.list = function (_msg, callback) {
@@ -87,10 +87,15 @@ MessageStore.prototype.uidl = function (_msg, callback) {
  * @param  {Function} callback (err, Message)
  */
 MessageStore.prototype.retr = function retr(_msg, callback) {
-    debug('retr', this.user, _msg);
     var msg = _msg - 1;
-    callback(null, this.messages[msg]);
+    debug('retr', this.user, _msg);
+    var invalidIndex = isNaN(msg) || !this.messages[msg];
+    if (invalidIndex) {
+        return callback(null, false);
+    }
+    this.read(this.messages[msg].uid, callback);
 };
+
 MessageStore.prototype.dele = function dele(_msg, callback) {
     var msg = _msg - 1;
     debug('dele', this.user, msg);
@@ -99,16 +104,13 @@ MessageStore.prototype.dele = function dele(_msg, callback) {
         return callback(null, false);
     }
     // not actually removed at this time - will be removed when connection closes
-    var deletedMsg = this.messages.slice(msg, msg + 1);
-    if (deletedMsg.length) {
-        this.deletedMessages.push(deletedMsg[0]);
-    }
+    this.messages[msg].deleted = true;
     return callback(null, true);
 };
 
 MessageStore.prototype.rset = function () {
     debug('rset', this.user);
-    this.messages = this.messages.concat(this.deletedMessages);
+    this.messages.forEach(function(msg, index){
+        delete msg.deleted;
+    });
 };
-
-exports.MessageStore = MessageStore;
