@@ -61,15 +61,36 @@ POP3Server.prototype.listen = function(port, callback){
     var self = this;
     this.socket = net.createServer(function(socket){
       var connection_id = ++self.COUNTER;
-      var cnx = new POP3Connnection(self, socket, connection_id);
+      var connection = new POP3Connnection(self, socket, connection_id);
       socket.on('data', function (data) {
-          self.onData(cnx, data);
+          self.onData(connection, data);
       });
       socket.on('end', function (data) {
-          self.onEnd(cnx, data);
+          self.onEnd(connection, data);
       });
       socket.on('error', function (err) {
-          self.onError(cnx, err);
+          self.onError(connection, err);
+      });
+    }).listen(port, callback);
+};
+
+POP3Server.prototype.listenSSL = function(port, callback){
+    var self = this;
+    if (!this.options.tls) {
+        return callback(new Error('listenSSL require tls options.'));
+    }
+    this.socket = tls.createServer(this.options.tls, function(socket){
+      var connection_id = ++self.COUNTER;
+      var connection = new POP3Connnection(self, socket, connection_id);
+      connection.secure = true;
+      socket.on('data', function (data) {
+          self.onData(connection, data);
+      });
+      socket.on('end', function (data) {
+          self.onEnd(connection, data);
+      });
+      socket.on('error', function (err) {
+          self.onError(connection, err);
       });
     }).listen(port, callback);
 };
@@ -154,11 +175,16 @@ POP3Server.prototype.cmdCAPA = function (connection, params) {
     if (this.authMethods) {
         var methods = [];
         for (var i in this.authMethods) {
-            if (this.authMethods.hasOwnProperty(i))
+            if (this.authMethods.hasOwnProperty(i)) {
                 methods.push(i);
+            }
         }
-        if (methods.length && connection.state == States.AUTHENTICATION)
+        if (methods.length && connection.state == States.AUTHENTICATION) {
             connection.response("SASL " + methods.join(" "));
+        }
+    }
+    if (this.options.tls && !connection.secure && connection.state === States.AUTHENTICATION) {
+        connection.response("STLS");
     }
     connection.response(".");
 }
@@ -185,14 +211,16 @@ POP3Server.prototype.cmdQUIT = function (connection) {
 
 POP3Server.prototype.cmdSTLS = function (connection) {
     var self = this;
-
+    if (connection.secure) {
+      return connection.response("-ERR Command not permitted when TLS active");
+    }
     if (connection.state != States.AUTHENTICATION) {
-      return connection.response("-ERR Only allowed in authentication mode");
+      return connection.response("-ERR Unknown command: STLS");
     }
     if (!this.options.tls) {
-      return connection.response("-ERR invalid command");
+      return connection.response("-ERR Unknown command: STLS");
     }
-    connection.response("+OK begin TLS negotiation");
+    connection.response("+OK Begin TLS negotiation now.");
     connection.socket.removeAllListeners();
     var socketOptions = {
       secureContext: tls.createSecureContext(self.options.tls),
@@ -201,6 +229,7 @@ POP3Server.prototype.cmdSTLS = function (connection) {
     connection.socket = new tls.TLSSocket(connection.socket, socketOptions);
 
     connection.socket.on('secure', function () {
+      connection.secure = true;
       connection.socket.on('data', function (data) {
           self.onData(connection, data);
       });
