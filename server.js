@@ -22,6 +22,7 @@ var POP3Server = module.exports = function(options) {
     this.server_name = options.serverName || os.hostname() || 'localhost';
     this.COUNTER = 0;
     this.connected_users = {};
+    this.sockets = [];
 
     this.authMethods = SASL.AUTHMethods;
 
@@ -59,7 +60,7 @@ var POP3Server = module.exports = function(options) {
 
 POP3Server.prototype.listen = function(port, callback){
     var self = this;
-    this.socket = net.createServer(function(socket){
+    this.sockets.push(net.createServer(function(socket){
       var connection_id = ++self.COUNTER;
       var connection = new POP3Connnection(self, socket, connection_id);
       socket.on('data', function (data) {
@@ -71,7 +72,7 @@ POP3Server.prototype.listen = function(port, callback){
       socket.on('error', function (err) {
           self.onError(connection, err);
       });
-    }).listen(port, callback);
+    }).listen(port, callback));
 };
 
 POP3Server.prototype.listenSSL = function(port, callback){
@@ -79,7 +80,7 @@ POP3Server.prototype.listenSSL = function(port, callback){
     if (!this.options.tls) {
         return callback(new Error('listenSSL require tls options.'));
     }
-    this.socket = tls.createServer(this.options.tls, function(socket){
+    this.sockets.push(tls.createServer(this.options.tls, function(socket){
       var connection_id = ++self.COUNTER;
       var connection = new POP3Connnection(self, socket, connection_id);
       connection.secure = true;
@@ -92,7 +93,20 @@ POP3Server.prototype.listenSSL = function(port, callback){
       socket.on('error', function (err) {
           self.onError(connection, err);
       });
-    }).listen(port, callback);
+    }).listen(port, callback));
+};
+
+POP3Server.prototype.close = function(callback) {
+    var self = this;
+    var count = 0;
+    this.sockets.forEach(function(socket) {
+        socket.close(function() {
+            count++;
+            if (count === self.sockets.length) {
+                callback();
+            }
+        });
+    });
 };
 
 POP3Server.prototype.afterLogin = function (connection, callback) {
