@@ -1,0 +1,6 @@
+.git
+node_modules
+.gitignore
+package-lock.json
+test
+.nyc_output/

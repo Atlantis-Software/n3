@@ -4,7 +4,9 @@
   "description": "POP3 server for node.js",
   "main": "server.js",
   "scripts": {
-    "test": "mocha -R spec tests/"
+    "test": "nyc mocha --timeout=10000 --exit",
+    "coveralls": "nyc report --reporter=text-lcov | coveralls",
+    "lint": "eslint ./"
   },
   "repository": {
     "type": "git",
@@ -15,12 +17,16 @@
     "node": ">=4.0.0"
   },
   "dependencies": {
-    "debug": "^2.2.0"
+    "debug": "^3.1.0"
   },
   "devDependencies": {
-    "chai": "~3.5.0",
+    "chai": "~4.1.2",
+    "coveralls": "^3.0.0",
+    "eslint": "~3.11.1",
+    "istanbul": "0.4.5",
     "mailx": "~0.0.11",
-    "mocha": "~3.0.2",
-    "mailcomposer": "~0.1.29"
+    "mocha": "~5.1.1",
+    "nodemailer": "~4.6.4",
+    "nyc": "~11.7.1"
   }
 }

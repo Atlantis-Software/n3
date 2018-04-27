@@ -5,7 +5,7 @@ var path = require('path');
 var	POP3Client = require('mailx/lib/poplib');
 var	POP3Server = require('../');
 var mailx = require('mailx');
-var mailcomposer = require("mailcomposer");
+var mailcomposer = require("nodemailer/lib/mail-composer");
 
 const	PORT = 11000;
 const SSL_PORT = 9930;
@@ -46,8 +46,9 @@ describe('POP3 server', function(){
 					message.addTo('you', 'you@example.net');
 					message.setSubject('hello');
 					message.setText('hi ! how are u?'); 
-					message.setHtml('hi ! how are u? <b>hugs</b>');
-					mailcomposer(message).build(cb);
+          message.setHtml('hi ! how are u? <b>hugs</b>');
+          var mail = new mailcomposer(message);
+					mail.compile().build(cb);
 				},
 				removeDeleted: function(deleted, cb) {
 					deleted.forEach(function(uid) {

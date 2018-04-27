@@ -4,7 +4,7 @@
  * @type {object}
  **/
 module.exports = {
-    AUTHENTICATION: 1,
-    TRANSACTION: 2,
-    UPDATE: 3
+  AUTHENTICATION: 1,
+  TRANSACTION: 2,
+  UPDATE: 3
 };
